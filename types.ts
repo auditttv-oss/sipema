@@ -77,6 +77,20 @@ export interface Cluster {
   lastAuditDate: string;
 }
 
+export interface UnitData {
+  id: string;
+  cluster: string;
+  block: string;
+  number: string;
+  type: string;
+  landArea: number;
+  ownerName: string;
+  residentStatus: 'Pemilik' | 'Penyewa' | 'Kosong';
+  phoneNumber: string;
+  familyMembers: number;
+  bastDate: string | null;
+}
+
 export interface Vendor {
   id: string;
   name: string;
