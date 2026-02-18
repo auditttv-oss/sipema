@@ -1,4 +1,4 @@
-import { User, Role, Complaint, ComplaintCategory, ComplaintStatus, Invoice, InvoiceStatus, MarketplaceItem, ClusterExpense, Cluster, UnitData, Vendor, Lead, LeadStatus, Payment } from './types';
+import { User, Role, Complaint, ComplaintCategory, ComplaintStatus, Invoice, InvoiceStatus, MarketplaceItem, ClusterExpense, Cluster, UnitData, Vendor, Lead, LeadStatus, Payment, HouseType } from './types';
 
 // Multiple Mock Users for Role Switching
 export const MOCK_USERS: User[] = [

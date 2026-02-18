@@ -1,42 +1,19 @@
-import React, { ReactNode, createContext, useContext, useState, useEffect } from 'react';
-import { 
-  MOCK_COMPLAINTS, 
-  MOCK_UNITS, 
-  MOCK_INVOICES, 
-  MOCK_CLUSTER_EXPENSES,
-  MOCK_CLUSTERS,
-  MOCK_VENDORS,
-  MOCK_LEADS,
-  MOCK_USERS,
-  MOCK_PAYMENTS,
-  MOCK_HOUSE_TYPES
-} from './constants';
-import { 
-  Complaint, 
-  UnitData, 
-  Invoice, 
-  ClusterExpense, 
-  ComplaintStatus, 
 import React, { ReactNode, createContext, useContext, useEffect, useMemo, useState } from 'react';
 import {
-  Complaint,
-  UnitData,
-  Invoice,
-  ClusterExpense,
-  ComplaintStatus,
-  InvoiceStatus,
   Cluster,
-  Vendor,
-  Lead,
-  User,
-  Payment,
-  HouseType
+  ClusterExpense,
+  Complaint,
+  ComplaintStatus,
   HouseType,
+  Invoice,
+  InvoiceStatus,
+  Lead,
+  Payment,
   Role,
+  UnitData,
+  User,
+  Vendor,
 } from './types';
-import * as complaintService from './services/complaintService';
-import * as userService from './services/userService';
-import { MOCK_PAYMENTS, MOCK_HOUSE_TYPES } from './constants';
 import { supabase } from './src/lib/supabaseClient';
 
 interface DataContextType {
@@ -44,64 +21,43 @@ interface DataContextType {
   units: UnitData[];
   invoices: Invoice[];
   expenses: ClusterExpense[];
-  clusters: Cluster[]; 
   clusters: Cluster[];
   vendors: Vendor[];
   leads: Lead[];
   users: User[];
   payments: Payment[];
   houseTypes: HouseType[];
-  
-  // Complaint CRUD
   currentUser: User | null;
   loading: boolean;
-  addComplaint: (complaint: Complaint) => void;
-  updateComplaintStatus: (id: string, status: ComplaintStatus) => void;
-  
-  // Unit CRUD
-  addUnit: (unit: UnitData) => void;
-  updateUnit: (unit: UnitData) => void;
-  deleteUnit: (id: string) => void;
-  
-  // Invoice CRUD
-  payInvoice: (id: string) => void;
-  addInvoice: (invoice: Invoice) => void;
-  updateInvoice: (invoice: Invoice) => void;
-  deleteInvoice: (id: string) => void;
-  
-  // Payment CRUD
-  submitPayment: (payment: Payment) => void;
-  verifyPayment: (id: string) => void;
-  
-  // Expense CRUD
-  addExpense: (expense: ClusterExpense) => void;
-  updateExpense: (expense: ClusterExpense) => void;
-  deleteExpense: (id: string) => void;
-  
-  // Cluster CRUD
-  addCluster: (cluster: Cluster) => void;
-  updateCluster: (cluster: Cluster) => void;
-  deleteCluster: (id: string) => void;
-
-  // Vendor CRUD
-  addVendor: (vendor: Vendor) => void;
-  updateVendor: (vendor: Vendor) => void;
-  deleteVendor: (id: string) => void;
-
-  // Marketing/Leads CRUD
-  addLead: (lead: Lead) => void;
-  updateLead: (lead: Lead) => void;
-  deleteLead: (id: string) => void;
-
-  // User CRUD
-  addUser: (user: User) => void;
-  updateUser: (user: User) => void;
-  deleteUser: (id: string) => void;
-
-  // House Type CRUD
-  addHouseType: (houseType: HouseType) => void;
-  updateHouseType: (houseType: HouseType) => void;
-  deleteHouseType: (id: string) => void;
+  addComplaint: (complaint: Complaint) => Promise<void>;
+  updateComplaintStatus: (id: string, status: ComplaintStatus) => Promise<void>;
+  addUnit: (unit: UnitData) => Promise<void>;
+  updateUnit: (unit: UnitData) => Promise<void>;
+  deleteUnit: (id: string) => Promise<void>;
+  payInvoice: (id: string) => Promise<void>;
+  addInvoice: (invoice: Invoice) => Promise<void>;
+  updateInvoice: (invoice: Invoice) => Promise<void>;
+  deleteInvoice: (id: string) => Promise<void>;
+  submitPayment: (payment: Payment) => Promise<void>;
+  verifyPayment: (id: string) => Promise<void>;
+  addExpense: (expense: ClusterExpense) => Promise<void>;
+  updateExpense: (expense: ClusterExpense) => Promise<void>;
+  deleteExpense: (id: string) => Promise<void>;
+  addCluster: (cluster: Cluster) => Promise<void>;
+  updateCluster: (cluster: Cluster) => Promise<void>;
+  deleteCluster: (id: string) => Promise<void>;
+  addVendor: (vendor: Vendor) => Promise<void>;
+  updateVendor: (vendor: Vendor) => Promise<void>;
+  deleteVendor: (id: string) => Promise<void>;
+  addLead: (lead: Lead) => Promise<void>;
+  updateLead: (lead: Lead) => Promise<void>;
+  deleteLead: (id: string) => Promise<void>;
+  addUser: (user: User) => Promise<void>;
+  updateUser: (user: User) => Promise<void>;
+  deleteUser: (id: string) => Promise<void>;
+  addHouseType: (houseType: HouseType) => Promise<void>;
+  updateHouseType: (houseType: HouseType) => Promise<void>;
+  deleteHouseType: (id: string) => Promise<void>;
 }
 
 const DataContext = createContext<DataContextType | undefined>(undefined);
@@ -109,48 +65,35 @@ const DataContext = createContext<DataContextType | undefined>(undefined);
 const toUser = (row: any): User => ({
   id: row.id,
   name: row.name,
-  role: (row.role as Role) ?? Role.RESIDENT,
+  role: row.role as Role,
   cluster: row.cluster ?? '-',
   unit: row.unit ?? '-',
   bastDate: row.bast_date ?? new Date().toISOString().slice(0, 10),
 });
 
-const toUnit = (row: any): UnitData => ({
+const toCluster = (row: any): Cluster => ({
   id: row.id,
-  cluster: row.cluster,
+  name: row.name,
+  managerName: row.manager_name,
+  totalUnits: row.total_units,
+  occupiedUnits: row.occupied_units,
+  cashBalance: row.cash_balance,
+  securityStatus: row.security_status,
+  lastAuditDate: row.last_audit_date,
+});
+
+const toUnit = (row: any, clusterNameById: Record<string, string>): UnitData => ({
+  id: row.id,
+  cluster: clusterNameById[row.cluster_id] ?? row.cluster_id,
   block: row.block,
   number: row.number,
   type: row.type,
-  landArea: row.land_area ?? 0,
-  ownerName: row.owner_name ?? '-',
-  residentStatus: row.resident_status ?? 'Kosong',
+  landArea: row.land_area,
+  ownerName: row.owner_name,
+  residentStatus: row.status,
   phoneNumber: row.phone_number ?? '-',
-  familyMembers: row.family_members ?? 0,
+  familyMembers: row.family_members,
   bastDate: row.bast_date,
-});
-
-const toComplaint = (row: any): Complaint => ({
-  id: row.id,
-  userId: row.user_id,
-  category: row.category,
-  subCategory: row.sub_category,
-  description: row.description,
-  photoUrl: row.photo_url,
-  status: row.status,
-  isWarranty: row.is_warranty ?? false,
-  createdAt: row.created_at,
-  upvotes: row.upvotes ?? 0,
-});
-
-const toInvoice = (row: any): Invoice => ({
-  id: row.id,
-  unitId: row.unit_id,
-  month: row.month,
-  year: row.year,
-  amount: row.amount,
-  status: row.status,
-  dueDate: row.due_date,
-  category: row.category,
 });
 
 const toExpense = (row: any): ClusterExpense => ({
@@ -189,26 +132,45 @@ const toLead = (row: any): Lead => ({
   createdAt: row.created_at,
 });
 
-const toCluster = (row: any): Cluster => ({
+const toPayment = (row: any): Payment => ({
   id: row.id,
-  name: row.name,
-  managerName: row.manager_name,
-  totalUnits: row.total_units,
-  occupiedUnits: row.occupied_units,
-  cashBalance: row.cash_balance,
-  securityStatus: row.security_status,
-  lastAuditDate: row.last_audit_date,
+  userId: row.user_id,
+  rekeningIpl: row.rekening_ipl,
+  nominal: row.nominal,
+  referensi: row.referensi,
+  nama: row.nama,
+  blok: row.blok,
+  nomorRumah: row.nomor_rumah,
+  status: row.status,
+  createdAt: row.created_at,
+});
+
+const toInvoice = (row: any): Invoice => ({
+  id: row.id,
+  unitId: row.residents?.unit_id ?? '',
+  month: row.month,
+  year: row.year,
+  amount: row.amount,
+  status: row.status,
+  dueDate: row.due_date,
+  category: row.category,
+});
+
+const toComplaint = (row: any): Complaint => ({
+  id: row.id,
+  userId: row.residents?.profile_id ?? row.resident_id,
+  category: row.category,
+  subCategory: row.sub_category,
+  description: row.description,
+  photoUrl: row.photo_url,
+  status: row.status,
+  isWarranty: row.is_warranty,
+  createdAt: row.created_at,
+  upvotes: row.upvotes,
 });
 
 export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // Initialize state with Mock Data
   const [complaints, setComplaints] = useState<Complaint[]>([]);
-  const [units, setUnits] = useState<UnitData[]>(MOCK_UNITS);
-  const [invoices, setInvoices] = useState<Invoice[]>(MOCK_INVOICES);
-  const [expenses, setExpenses] = useState<ClusterExpense[]>(MOCK_CLUSTER_EXPENSES);
-  const [clusters, setClusters] = useState<Cluster[]>(MOCK_CLUSTERS);
-  const [vendors, setVendors] = useState<Vendor[]>(MOCK_VENDORS);
-  const [leads, setLeads] = useState<Lead[]>(MOCK_LEADS);
   const [units, setUnits] = useState<UnitData[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [expenses, setExpenses] = useState<ClusterExpense[]>([]);
@@ -216,20 +178,43 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [payments, setPayments] = useState<Payment[]>(MOCK_PAYMENTS);
-  const [houseTypes, setHouseTypes] = useState<HouseType[]>(MOCK_HOUSE_TYPES);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [houseTypes, setHouseTypes] = useState<HouseType[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshInvoices = async () => {
+    const { data } = await supabase
+      .from('invoices')
+      .select('*, residents(unit_id)')
+      .order('year', { ascending: false });
+    setInvoices((data || []).map(toInvoice));
+  };
+
+  const refreshComplaints = async () => {
+    const { data } = await supabase
+      .from('complaints')
+      .select('*, residents(profile_id)')
+      .order('created_at', { ascending: false });
+    setComplaints((data || []).map(toComplaint));
+  };
 
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const results = await Promise.allSettled([
+      const [
+        profilesRes,
+        clustersRes,
+        unitsRes,
+        expensesRes,
+        vendorsRes,
+        leadsRes,
+        paymentsRes,
+        houseTypesRes,
+      ] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('clusters').select('*'),
         supabase.from('units').select('*'),
-        supabase.from('complaints').select('*').order('created_at', { ascending: false }),
-        supabase.from('invoices').select('*').order('year', { ascending: false }),
         supabase.from('ledger_entries').select('*').order('date', { ascending: false }),
         supabase.from('vendors').select('*'),
         supabase.from('leads').select('*').order('created_at', { ascending: false }),
@@ -237,248 +222,218 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         supabase.from('house_types').select('*'),
       ]);
 
-      const [
-        profilesRes,
-        clustersRes,
-        unitsRes,
-        complaintsRes,
-        invoicesRes,
-        expensesRes,
-        vendorsRes,
-        leadsRes,
-        paymentsRes,
-        houseTypesRes,
-      ] = results.map((r) => (r.status === 'fulfilled' ? r.value : null));
+      const clusterRows = clustersRes.data || [];
+      const clusterNameById = Object.fromEntries(clusterRows.map((clusterRow: any) => [clusterRow.id, clusterRow.name]));
 
-      if (profilesRes && !profilesRes.error) setUsers((profilesRes.data || []).map(toUser));
-      if (clustersRes && !clustersRes.error) setClusters((clustersRes.data || []).map(toCluster));
-      if (unitsRes && !unitsRes.error) setUnits((unitsRes.data || []).map(toUnit));
-      if (complaintsRes && !complaintsRes.error) setComplaints((complaintsRes.data || []).map(toComplaint));
-      if (invoicesRes && !invoicesRes.error) setInvoices((invoicesRes.data || []).map(toInvoice));
-      if (expensesRes && !expensesRes.error) setExpenses((expensesRes.data || []).map(toExpense));
-      if (vendorsRes && !vendorsRes.error) setVendors((vendorsRes.data || []).map(toVendor));
-      if (leadsRes && !leadsRes.error) setLeads((leadsRes.data || []).map(toLead));
-      if (paymentsRes && !paymentsRes.error) setPayments((paymentsRes.data || []) as Payment[]);
-      if (houseTypesRes && !houseTypesRes.error) setHouseTypes((houseTypesRes.data || []) as HouseType[]);
-    } catch (error) {
-      console.error('Failed to load Supabase data:', error);
+      setUsers((profilesRes.data || []).map(toUser));
+      setClusters(clusterRows.map(toCluster));
+      setUnits((unitsRes.data || []).map((row: any) => toUnit(row, clusterNameById)));
+      setExpenses((expensesRes.data || []).map(toExpense));
+      setVendors((vendorsRes.data || []).map(toVendor));
+      setLeads((leadsRes.data || []).map(toLead));
+      setPayments((paymentsRes.data || []).map(toPayment));
+      setHouseTypes((houseTypesRes.data || []) as HouseType[]);
+
+      await Promise.all([refreshComplaints(), refreshInvoices()]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    complaintService.getComplaints().then(setComplaints).catch(console.error);
-  }, []);
-
-  useEffect(() => {
-    userService.getUsers().then(setUsers).catch(console.error);
     loadAllData().catch(console.error);
 
-    const initAuth = async () => {
+    const bootAuth = async () => {
       const { data } = await supabase.auth.getSession();
       const userId = data.session?.user.id;
-      if (userId) {
-        const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
-        if (profile) setCurrentUser(toUser(profile));
-      }
-    };
-    initAuth().catch(console.error);
+      if (!userId) return setCurrentUser(null);
 
-    const { data: authSubscription } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
+      if (profile) setCurrentUser(toUser(profile));
+    };
+
+    bootAuth().catch(console.error);
+
+    const authListener = supabase.auth.onAuthStateChange(async (_event, session) => {
       const userId = session?.user.id;
-      if (!userId) {
-        setCurrentUser(null);
-        return;
-      }
+      if (!userId) return setCurrentUser(null);
+
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', userId).single();
       if (profile) setCurrentUser(toUser(profile));
     });
 
-    const complaintChannel = supabase
-      .channel('complaints-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, () => {
-        supabase.from('complaints').select('*').order('created_at', { ascending: false }).then(({ data }) => {
-          setComplaints((data || []).map(toComplaint));
-        });
-      })
+    const complaintsChannel = supabase
+      .channel('complaints-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'complaints' }, refreshComplaints)
       .subscribe();
 
-    const invoiceChannel = supabase
-      .channel('invoices-live')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, () => {
-        supabase.from('invoices').select('*').order('year', { ascending: false }).then(({ data }) => {
-          setInvoices((data || []).map(toInvoice));
-        });
-      })
+    const invoicesChannel = supabase
+      .channel('invoices-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, refreshInvoices)
       .subscribe();
 
     return () => {
-      authSubscription.subscription.unsubscribe();
-      supabase.removeChannel(complaintChannel);
-      supabase.removeChannel(invoiceChannel);
+      authListener.data.subscription.unsubscribe();
+      supabase.removeChannel(complaintsChannel);
+      supabase.removeChannel(invoicesChannel);
     };
   }, []);
 
-  // Complaints
-  const addComplaint = (newComplaint: Complaint) => {
-    const { id, createdAt, ...complaintData } = newComplaint;
-    complaintService.addComplaint(complaintData).then(added => {
-      setComplaints(prev => [added, ...prev]);
-    const payload = {
-      user_id: newComplaint.userId,
-      category: newComplaint.category,
-      sub_category: newComplaint.subCategory,
-      description: newComplaint.description,
-      photo_url: newComplaint.photoUrl,
-      status: newComplaint.status ?? ComplaintStatus.PENDING,
-      is_warranty: newComplaint.isWarranty,
-      upvotes: newComplaint.upvotes ?? 0,
-    };
-    supabase.from('complaints').insert(payload).select().single().then(({ data }) => {
-      if (data) setComplaints((prev) => [toComplaint(data), ...prev]);
-    }).catch(console.error);
+  const getResidentIdByUserId = async (userId: string) => {
+    const byProfile: any = await supabase.from('residents').select('id').eq('profile_id', userId).maybeSingle();
+    if (byProfile?.data?.id) return byProfile.data.id as string;
+
+    const byResident: any = await supabase.from('residents').select('id').eq('id', userId).maybeSingle();
+    return byResident?.data?.id as string | undefined;
   };
 
-  const updateComplaintStatus = (id: string, status: ComplaintStatus) => {
-    complaintService.updateComplaintStatus(id, status).then(() => {
-      setComplaints(prev => prev.map(c => 
-        c.id === id ? { ...c, status: status } : c
-      ));
-    supabase.from('complaints').update({ status }).eq('id', id).then(({ error }) => {
-      if (!error) setComplaints((prev) => prev.map((c) => (c.id === id ? { ...c, status } : c)));
-    }).catch(console.error);
+  const getResidentIdByUnit = async (unitId: string) => {
+    const result: any = await supabase.from('residents').select('id').eq('unit_id', unitId).limit(1).maybeSingle();
+    return result?.data?.id as string | undefined;
   };
 
-  // Units
-  const addUnit = (newUnit: UnitData) => {
-    setUnits(prev => [newUnit, ...prev]);
-  const addUnit = (unit: UnitData) => {
-    supabase.from('units').insert({
+  const addComplaint = async (complaint: Complaint) => {
+    const residentId = await getResidentIdByUserId(complaint.userId);
+    if (!residentId) return;
+
+    await supabase.from('complaints').insert({
+      id: complaint.id,
+      resident_id: residentId,
+      category: complaint.category,
+      sub_category: complaint.subCategory,
+      description: complaint.description,
+      photo_url: complaint.photoUrl,
+      status: complaint.status,
+      is_warranty: complaint.isWarranty,
+      upvotes: complaint.upvotes,
+      created_at: complaint.createdAt,
+    });
+    await refreshComplaints();
+  };
+
+  const updateComplaintStatus = async (id: string, status: ComplaintStatus) => {
+    await supabase.from('complaints').update({ status }).eq('id', id);
+    setComplaints((previous) => previous.map((complaint) => (complaint.id === id ? { ...complaint, status } : complaint)));
+  };
+
+  const addUnit = async (unit: UnitData) => {
+    const cluster = clusters.find((item) => item.name === unit.cluster);
+    if (!cluster) return;
+
+    await supabase.from('units').insert({
       id: unit.id,
-      cluster: unit.cluster,
+      cluster_id: cluster.id,
       block: unit.block,
       number: unit.number,
       type: unit.type,
       land_area: unit.landArea,
       owner_name: unit.ownerName,
-      resident_status: unit.residentStatus,
+      status: unit.residentStatus,
       phone_number: unit.phoneNumber,
       family_members: unit.familyMembers,
       bast_date: unit.bastDate,
-    }).then(({ error }) => {
-      if (!error) setUnits((prev) => [unit, ...prev]);
-    }).catch(console.error);
+    });
+    setUnits((previous) => [unit, ...previous]);
   };
 
-  const updateUnit = (updatedUnit: UnitData) => {
-    setUnits(prev => prev.map(u => u.id === updatedUnit.id ? updatedUnit : u));
-  const updateUnit = (unit: UnitData) => {
-    supabase.from('units').update({
-      cluster: unit.cluster,
-      block: unit.block,
-      number: unit.number,
-      type: unit.type,
-      land_area: unit.landArea,
-      owner_name: unit.ownerName,
-      resident_status: unit.residentStatus,
-      phone_number: unit.phoneNumber,
-      family_members: unit.familyMembers,
-      bast_date: unit.bastDate,
-    }).eq('id', unit.id).then(({ error }) => {
-      if (!error) setUnits((prev) => prev.map((u) => (u.id === unit.id ? unit : u)));
-    }).catch(console.error);
+  const updateUnit = async (unit: UnitData) => {
+    const cluster = clusters.find((item) => item.name === unit.cluster);
+    if (!cluster) return;
+
+    await supabase
+      .from('units')
+      .update({
+        cluster_id: cluster.id,
+        block: unit.block,
+        number: unit.number,
+        type: unit.type,
+        land_area: unit.landArea,
+        owner_name: unit.ownerName,
+        status: unit.residentStatus,
+        phone_number: unit.phoneNumber,
+        family_members: unit.familyMembers,
+        bast_date: unit.bastDate,
+      })
+      .eq('id', unit.id);
+
+    setUnits((previous) => previous.map((item) => (item.id === unit.id ? unit : item)));
   };
 
-  const deleteUnit = (id: string) => {
-    setUnits(prev => prev.filter(u => u.id !== id));
-    supabase.from('units').delete().eq('id', id).then(({ error }) => {
-      if (!error) setUnits((prev) => prev.filter((u) => u.id !== id));
-    }).catch(console.error);
+  const deleteUnit = async (id: string) => {
+    await supabase.from('units').delete().eq('id', id);
+    setUnits((previous) => previous.filter((unit) => unit.id !== id));
   };
 
-  // Invoices
-  const payInvoice = (id: string) => {
-    setInvoices(prev => prev.map(inv => 
-      inv.id === id ? { ...inv, status: InvoiceStatus.PAID } : inv
-    ));
-    supabase.from('invoices').update({ status: InvoiceStatus.PAID }).eq('id', id).then(({ error }) => {
-      if (!error) setInvoices((prev) => prev.map((inv) => (inv.id === id ? { ...inv, status: InvoiceStatus.PAID } : inv)));
-    }).catch(console.error);
+  const payInvoice = async (id: string) => {
+    await supabase.from('invoices').update({ status: InvoiceStatus.PAID }).eq('id', id);
+    setInvoices((previous) => previous.map((invoice) => (invoice.id === id ? { ...invoice, status: InvoiceStatus.PAID } : invoice)));
   };
 
-  const addInvoice = (newInvoice: Invoice) => {
-    setInvoices(prev => [newInvoice, ...prev]);
-  const addInvoice = (invoice: Invoice) => {
-    supabase.from('invoices').insert({
+  const addInvoice = async (invoice: Invoice) => {
+    const residentId = await getResidentIdByUnit(invoice.unitId);
+    if (!residentId) return;
+
+    await supabase.from('invoices').insert({
       id: invoice.id,
-      unit_id: invoice.unitId,
+      resident_id: residentId,
       month: invoice.month,
       year: invoice.year,
       amount: invoice.amount,
       status: invoice.status,
       due_date: invoice.dueDate,
       category: invoice.category,
-    }).then(({ error }) => {
-      if (!error) setInvoices((prev) => [invoice, ...prev]);
-    }).catch(console.error);
+    });
+    await refreshInvoices();
   };
 
-  const updateInvoice = (updatedInvoice: Invoice) => {
-    setInvoices(prev => prev.map(inv => inv.id === updatedInvoice.id ? updatedInvoice : inv));
-  const updateInvoice = (invoice: Invoice) => {
-    supabase.from('invoices').update({
-      unit_id: invoice.unitId,
-      month: invoice.month,
-      year: invoice.year,
-      amount: invoice.amount,
-      status: invoice.status,
-      due_date: invoice.dueDate,
-      category: invoice.category,
-    }).eq('id', invoice.id).then(({ error }) => {
-      if (!error) setInvoices((prev) => prev.map((inv) => (inv.id === invoice.id ? invoice : inv)));
-    }).catch(console.error);
+  const updateInvoice = async (invoice: Invoice) => {
+    const residentId = await getResidentIdByUnit(invoice.unitId);
+    if (!residentId) return;
+
+    await supabase
+      .from('invoices')
+      .update({
+        resident_id: residentId,
+        month: invoice.month,
+        year: invoice.year,
+        amount: invoice.amount,
+        status: invoice.status,
+        due_date: invoice.dueDate,
+        category: invoice.category,
+      })
+      .eq('id', invoice.id);
+
+    setInvoices((previous) => previous.map((item) => (item.id === invoice.id ? invoice : item)));
   };
 
-  const deleteInvoice = (id: string) => {
-    setInvoices(prev => prev.filter(inv => inv.id !== id));
-    supabase.from('invoices').delete().eq('id', id).then(({ error }) => {
-      if (!error) setInvoices((prev) => prev.filter((inv) => inv.id !== id));
-    }).catch(console.error);
+  const deleteInvoice = async (id: string) => {
+    await supabase.from('invoices').delete().eq('id', id);
+    setInvoices((previous) => previous.filter((invoice) => invoice.id !== id));
   };
 
-  // Payments
-  const submitPayment = (newPayment: Payment) => {
-    setPayments(prev => [newPayment, ...prev]);
-  const submitPayment = (payment: Payment) => {
-    supabase.from('payments').insert(payment).then(({ error }) => {
-      if (!error) setPayments((prev) => [payment, ...prev]);
-    }).catch(console.error);
+  const submitPayment = async (payment: Payment) => {
+    await supabase.from('payments').insert({
+      id: payment.id,
+      user_id: payment.userId,
+      rekening_ipl: payment.rekeningIpl,
+      nominal: payment.nominal,
+      referensi: payment.referensi,
+      nama: payment.nama,
+      blok: payment.blok,
+      nomor_rumah: payment.nomorRumah,
+      status: payment.status,
+      created_at: payment.createdAt,
+    });
+    setPayments((previous) => [payment, ...previous]);
   };
 
-  const verifyPayment = (id: string) => {
-    setPayments(prev => prev.map(p => 
-      p.id === id ? { ...p, status: 'verified' as const } : p
-    ));
-    // Find user's unpaid invoices and mark as paid
-    const payment = payments.find(p => p.id === id);
-    if (payment) {
-      setInvoices(prev => prev.map(inv => 
-        inv.unitId === payment.userId && inv.status !== InvoiceStatus.PAID 
-          ? { ...inv, status: InvoiceStatus.PAID } 
-          : inv
-      ));
-    }
-    supabase.from('payments').update({ status: 'verified' }).eq('id', id).then(({ error }) => {
-      if (!error) setPayments((prev) => prev.map((p) => (p.id === id ? { ...p, status: 'verified' } : p)));
-    }).catch(console.error);
+  const verifyPayment = async (id: string) => {
+    await supabase.from('payments').update({ status: 'verified' }).eq('id', id);
+    setPayments((previous) => previous.map((payment) => (payment.id === id ? { ...payment, status: 'verified' } : payment)));
   };
 
-  // Expenses
-  const addExpense = (newExpense: ClusterExpense) => {
-    setExpenses(prev => [newExpense, ...prev]);
-  const addExpense = (expense: ClusterExpense) => {
-    supabase.from('ledger_entries').insert({
+  const addExpense = async (expense: ClusterExpense) => {
+    await supabase.from('ledger_entries').insert({
       id: expense.id,
       cluster_id: expense.clusterId,
       date: expense.date,
@@ -486,38 +441,32 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       description: expense.description,
       amount: expense.amount,
       proof_url: expense.proofUrl,
-    }).then(({ error }) => {
-      if (!error) setExpenses((prev) => [expense, ...prev]);
-    }).catch(console.error);
+    });
+    setExpenses((previous) => [expense, ...previous]);
   };
 
-  const updateExpense = (updatedExpense: ClusterExpense) => {
-    setExpenses(prev => prev.map(exp => exp.id === updatedExpense.id ? updatedExpense : exp));
-  const updateExpense = (expense: ClusterExpense) => {
-    supabase.from('ledger_entries').update({
-      cluster_id: expense.clusterId,
-      date: expense.date,
-      category: expense.category,
-      description: expense.description,
-      amount: expense.amount,
-      proof_url: expense.proofUrl,
-    }).eq('id', expense.id).then(({ error }) => {
-      if (!error) setExpenses((prev) => prev.map((e) => (e.id === expense.id ? expense : e)));
-    }).catch(console.error);
+  const updateExpense = async (expense: ClusterExpense) => {
+    await supabase
+      .from('ledger_entries')
+      .update({
+        cluster_id: expense.clusterId,
+        date: expense.date,
+        category: expense.category,
+        description: expense.description,
+        amount: expense.amount,
+        proof_url: expense.proofUrl,
+      })
+      .eq('id', expense.id);
+    setExpenses((previous) => previous.map((item) => (item.id === expense.id ? expense : item)));
   };
 
-  const deleteExpense = (id: string) => {
-    setExpenses(prev => prev.filter(exp => exp.id !== id));
-    supabase.from('ledger_entries').delete().eq('id', id).then(({ error }) => {
-      if (!error) setExpenses((prev) => prev.filter((e) => e.id !== id));
-    }).catch(console.error);
+  const deleteExpense = async (id: string) => {
+    await supabase.from('ledger_entries').delete().eq('id', id);
+    setExpenses((previous) => previous.filter((expense) => expense.id !== id));
   };
 
-  // Clusters
-  const addCluster = (newCluster: Cluster) => {
-    setClusters(prev => [...prev, newCluster]);
-  const addCluster = (cluster: Cluster) => {
-    supabase.from('clusters').insert({
+  const addCluster = async (cluster: Cluster) => {
+    await supabase.from('clusters').insert({
       id: cluster.id,
       name: cluster.name,
       manager_name: cluster.managerName,
@@ -526,41 +475,33 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       cash_balance: cluster.cashBalance,
       security_status: cluster.securityStatus,
       last_audit_date: cluster.lastAuditDate,
-    }).then(({ error }) => {
-      if (!error) setClusters((prev) => [...prev, cluster]);
-    }).catch(console.error);
+    });
+    setClusters((previous) => [...previous, cluster]);
   };
 
-  const updateCluster = (updatedCluster: Cluster) => {
-    setClusters(prev => prev.map(c => 
-      c.id === updatedCluster.id ? updatedCluster : c
-    ));
-  const updateCluster = (cluster: Cluster) => {
-    supabase.from('clusters').update({
-      name: cluster.name,
-      manager_name: cluster.managerName,
-      total_units: cluster.totalUnits,
-      occupied_units: cluster.occupiedUnits,
-      cash_balance: cluster.cashBalance,
-      security_status: cluster.securityStatus,
-      last_audit_date: cluster.lastAuditDate,
-    }).eq('id', cluster.id).then(({ error }) => {
-      if (!error) setClusters((prev) => prev.map((c) => (c.id === cluster.id ? cluster : c)));
-    }).catch(console.error);
+  const updateCluster = async (cluster: Cluster) => {
+    await supabase
+      .from('clusters')
+      .update({
+        name: cluster.name,
+        manager_name: cluster.managerName,
+        total_units: cluster.totalUnits,
+        occupied_units: cluster.occupiedUnits,
+        cash_balance: cluster.cashBalance,
+        security_status: cluster.securityStatus,
+        last_audit_date: cluster.lastAuditDate,
+      })
+      .eq('id', cluster.id);
+    setClusters((previous) => previous.map((item) => (item.id === cluster.id ? cluster : item)));
   };
 
-  const deleteCluster = (id: string) => {
-    setClusters(prev => prev.filter(c => c.id !== id));
-    supabase.from('clusters').delete().eq('id', id).then(({ error }) => {
-      if (!error) setClusters((prev) => prev.filter((c) => c.id !== id));
-    }).catch(console.error);
+  const deleteCluster = async (id: string) => {
+    await supabase.from('clusters').delete().eq('id', id);
+    setClusters((previous) => previous.filter((cluster) => cluster.id !== id));
   };
 
-  // Vendors
-  const addVendor = (newVendor: Vendor) => {
-    setVendors(prev => [...prev, newVendor]);
-  const addVendor = (vendor: Vendor) => {
-    supabase.from('vendors').insert({
+  const addVendor = async (vendor: Vendor) => {
+    await supabase.from('vendors').insert({
       id: vendor.id,
       name: vendor.name,
       service_type: vendor.serviceType,
@@ -571,42 +512,35 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       contract_start: vendor.contractStart,
       contract_end: vendor.contractEnd,
       monthly_cost: vendor.monthlyCost,
-    }).then(({ error }) => {
-      if (!error) setVendors((prev) => [...prev, vendor]);
-    }).catch(console.error);
+    });
+    setVendors((previous) => [...previous, vendor]);
   };
 
-  const updateVendor = (updatedVendor: Vendor) => {
-    setVendors(prev => prev.map(v => v.id === updatedVendor.id ? updatedVendor : v));
-  const updateVendor = (vendor: Vendor) => {
-    supabase.from('vendors').update({
-      name: vendor.name,
-      service_type: vendor.serviceType,
-      contact_person: vendor.contactPerson,
-      phone: vendor.phone,
-      email: vendor.email,
-      status: vendor.status,
-      contract_start: vendor.contractStart,
-      contract_end: vendor.contractEnd,
-      monthly_cost: vendor.monthlyCost,
-    }).eq('id', vendor.id).then(({ error }) => {
-      if (!error) setVendors((prev) => prev.map((v) => (v.id === vendor.id ? vendor : v)));
-    }).catch(console.error);
+  const updateVendor = async (vendor: Vendor) => {
+    await supabase
+      .from('vendors')
+      .update({
+        name: vendor.name,
+        service_type: vendor.serviceType,
+        contact_person: vendor.contactPerson,
+        phone: vendor.phone,
+        email: vendor.email,
+        status: vendor.status,
+        contract_start: vendor.contractStart,
+        contract_end: vendor.contractEnd,
+        monthly_cost: vendor.monthlyCost,
+      })
+      .eq('id', vendor.id);
+    setVendors((previous) => previous.map((item) => (item.id === vendor.id ? vendor : item)));
   };
 
-  const deleteVendor = (id: string) => {
-    setVendors(prev => prev.filter(v => v.id !== id));
-    supabase.from('vendors').delete().eq('id', id).then(({ error }) => {
-      if (!error) setVendors((prev) => prev.filter((v) => v.id !== id));
-    }).catch(console.error);
+  const deleteVendor = async (id: string) => {
+    await supabase.from('vendors').delete().eq('id', id);
+    setVendors((previous) => previous.filter((vendor) => vendor.id !== id));
   };
 
-  // Leads (Marketing)
-  const addLead = (newLead: Lead) => {
-    setLeads(prev => [newLead, ...prev]);
-  }
-  const addLead = (lead: Lead) => {
-    supabase.from('leads').insert({
+  const addLead = async (lead: Lead) => {
+    await supabase.from('leads').insert({
       id: lead.id,
       name: lead.name,
       phone: lead.phone,
@@ -617,106 +551,81 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       notes: lead.notes,
       assigned_agent: lead.assignedAgent,
       created_at: lead.createdAt,
-    }).then(({ error }) => {
-      if (!error) setLeads((prev) => [lead, ...prev]);
-    }).catch(console.error);
+    });
+    setLeads((previous) => [lead, ...previous]);
   };
 
-  const updateLead = (updatedLead: Lead) => {
-    setLeads(prev => prev.map(l => l.id === updatedLead.id ? updatedLead : l));
-  }
-  const updateLead = (lead: Lead) => {
-    supabase.from('leads').update({
-      name: lead.name,
-      phone: lead.phone,
-      interest: lead.interest,
-      budget: lead.budget,
-      source: lead.source,
-      status: lead.status,
-      notes: lead.notes,
-      assigned_agent: lead.assignedAgent,
-      created_at: lead.createdAt,
-    }).eq('id', lead.id).then(({ error }) => {
-      if (!error) setLeads((prev) => prev.map((l) => (l.id === lead.id ? lead : l)));
-    }).catch(console.error);
+  const updateLead = async (lead: Lead) => {
+    await supabase
+      .from('leads')
+      .update({
+        name: lead.name,
+        phone: lead.phone,
+        interest: lead.interest,
+        budget: lead.budget,
+        source: lead.source,
+        status: lead.status,
+        notes: lead.notes,
+        assigned_agent: lead.assignedAgent,
+        created_at: lead.createdAt,
+      })
+      .eq('id', lead.id);
+    setLeads((previous) => previous.map((item) => (item.id === lead.id ? lead : item)));
   };
 
-  const deleteLead = (id: string) => {
-    setLeads(prev => prev.filter(l => l.id !== id));
-  }
-
-  // Users
-  const addUser = (newUser: User) => {
-    const { id, ...userData } = newUser;
-    userService.addUser(userData).then(added => {
-      setUsers(prev => [...prev, added]);
-    supabase.from('leads').delete().eq('id', id).then(({ error }) => {
-      if (!error) setLeads((prev) => prev.filter((l) => l.id !== id));
-    }).catch(console.error);
+  const deleteLead = async (id: string) => {
+    await supabase.from('leads').delete().eq('id', id);
+    setLeads((previous) => previous.filter((lead) => lead.id !== id));
   };
 
-  const addUser = (user: User) => {
-    supabase.from('profiles').insert({
+  const addUser = async (user: User) => {
+    await supabase.from('profiles').insert({
       id: user.id,
       name: user.name,
       role: user.role,
       cluster: user.cluster,
       unit: user.unit,
       bast_date: user.bastDate,
-    }).then(({ error }) => {
-      if (!error) setUsers((prev) => [...prev, user]);
-    }).catch(console.error);
+    });
+    setUsers((previous) => [...previous, user]);
   };
 
-  const updateUser = (updatedUser: User) => {
-    userService.updateUser(updatedUser).then(() => {
-      setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
-  const updateUser = (user: User) => {
-    supabase.from('profiles').update({
-      name: user.name,
-      role: user.role,
-      cluster: user.cluster,
-      unit: user.unit,
-      bast_date: user.bastDate,
-    }).eq('id', user.id).then(({ error }) => {
-      if (!error) setUsers((prev) => prev.map((u) => (u.id === user.id ? user : u)));
-    }).catch(console.error);
+  const updateUser = async (user: User) => {
+    await supabase
+      .from('profiles')
+      .update({
+        name: user.name,
+        role: user.role,
+        cluster: user.cluster,
+        unit: user.unit,
+        bast_date: user.bastDate,
+      })
+      .eq('id', user.id);
+    setUsers((previous) => previous.map((item) => (item.id === user.id ? user : item)));
   };
 
-  const deleteUser = (id: string) => {
-    userService.deleteUser(id).then(() => {
-      setUsers(prev => prev.filter(u => u.id !== id));
-    supabase.from('profiles').delete().eq('id', id).then(({ error }) => {
-      if (!error) setUsers((prev) => prev.filter((u) => u.id !== id));
-    }).catch(console.error);
+  const deleteUser = async (id: string) => {
+    await supabase.from('profiles').delete().eq('id', id);
+    setUsers((previous) => previous.filter((user) => user.id !== id));
   };
 
-  // House Types
-  const addHouseType = (newHouseType: HouseType) => {
-    setHouseTypes(prev => [newHouseType, ...prev]);
-  const addHouseType = (houseType: HouseType) => {
-    supabase.from('house_types').insert(houseType).then(({ error }) => {
-      if (!error) setHouseTypes((prev) => [houseType, ...prev]);
-    }).catch(console.error);
+  const addHouseType = async (houseType: HouseType) => {
+    await supabase.from('house_types').insert(houseType);
+    setHouseTypes((previous) => [houseType, ...previous]);
   };
 
-  const updateHouseType = (updatedHouseType: HouseType) => {
-    setHouseTypes(prev => prev.map(ht => ht.id === updatedHouseType.id ? updatedHouseType : ht));
-  const updateHouseType = (houseType: HouseType) => {
-    supabase.from('house_types').update(houseType).eq('id', houseType.id).then(({ error }) => {
-      if (!error) setHouseTypes((prev) => prev.map((ht) => (ht.id === houseType.id ? houseType : ht)));
-    }).catch(console.error);
+  const updateHouseType = async (houseType: HouseType) => {
+    await supabase.from('house_types').update(houseType).eq('id', houseType.id);
+    setHouseTypes((previous) => previous.map((item) => (item.id === houseType.id ? houseType : item)));
   };
 
-  const deleteHouseType = (id: string) => {
-    setHouseTypes(prev => prev.filter(ht => ht.id !== id));
-    supabase.from('house_types').delete().eq('id', id).then(({ error }) => {
-      if (!error) setHouseTypes((prev) => prev.filter((ht) => ht.id !== id));
-    }).catch(console.error);
+  const deleteHouseType = async (id: string) => {
+    await supabase.from('house_types').delete().eq('id', id);
+    setHouseTypes((previous) => previous.filter((houseType) => houseType.id !== id));
   };
 
-  return (
-    <DataContext.Provider value={{
+  const value = useMemo(
+    () => ({
       complaints,
       units,
       invoices,
@@ -727,6 +636,8 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       users,
       payments,
       houseTypes,
+      currentUser,
+      loading,
       addComplaint,
       updateComplaintStatus,
       addUnit,
@@ -755,64 +666,16 @@ export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       deleteUser,
       addHouseType,
       updateHouseType,
-      deleteHouseType
-    }}>
-      {children}
-    </DataContext.Provider>
+      deleteHouseType,
+    }),
+    [complaints, units, invoices, expenses, clusters, vendors, leads, users, payments, houseTypes, currentUser, loading],
   );
-  const value = useMemo(() => ({
-    complaints,
-    units,
-    invoices,
-    expenses,
-    clusters,
-    vendors,
-    leads,
-    users,
-    payments,
-    houseTypes,
-    currentUser,
-    loading,
-    addComplaint,
-    updateComplaintStatus,
-    addUnit,
-    updateUnit,
-    deleteUnit,
-    payInvoice,
-    addInvoice,
-    updateInvoice,
-    deleteInvoice,
-    submitPayment,
-    verifyPayment,
-    addExpense,
-    updateExpense,
-    deleteExpense,
-    addCluster,
-    updateCluster,
-    deleteCluster,
-    addVendor,
-    updateVendor,
-    deleteVendor,
-    addLead,
-    updateLead,
-    deleteLead,
-    addUser,
-    updateUser,
-    deleteUser,
-    addHouseType,
-    updateHouseType,
-    deleteHouseType,
-  }), [complaints, units, invoices, expenses, clusters, vendors, leads, users, payments, houseTypes, currentUser, loading]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
 export const useData = () => {
   const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error('useData must be used within a DataProvider');
-  }
   if (!context) throw new Error('useData must be used within a DataProvider');
   return context;
-};
 };
